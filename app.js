@@ -105,10 +105,20 @@ function makeId() {
 }
 
 function isDoneOn(habit, dateStr) {
-  return habit.logs[dateStr] === 'done';
+  return entryStatus(habit.logs[dateStr]) === 'done';
 }
 function isSlipOn(habit, dateStr) {
-  return habit.logs[dateStr] === 'slip';
+  return entryStatus(habit.logs[dateStr]) === 'slip';
+}
+// A log entry is either the plain string 'done'/'slip' (legacy/simple case)
+// or { status: 'slip', note: '...' } when a slip has a trigger note attached.
+function entryStatus(entry) {
+  if (!entry) return null;
+  return typeof entry === 'string' ? entry : (entry.status || null);
+}
+function slipNoteOn(habit, dateStr) {
+  const entry = habit.logs[dateStr];
+  return (entry && typeof entry === 'object' && entry.note) ? entry.note : '';
 }
 
 // Good daily habit streak: consecutive days ending today (or yesterday if today not yet done)
@@ -163,12 +173,54 @@ function badHabitStreak(habit) {
   return Math.max(0, diff + 1);
 }
 function lastSlipDate(habit) {
-  const slipDates = Object.keys(habit.logs).filter(d => habit.logs[d] === 'slip').sort();
+  const slipDates = Object.keys(habit.logs).filter(d => isSlipOn(habit, d)).sort();
   return slipDates.length ? slipDates[slipDates.length - 1] : null;
 }
 function totalSlips(habit) {
-  return Object.values(habit.logs).filter(v => v === 'slip').length;
+  return Object.keys(habit.logs).filter(d => isSlipOn(habit, d)).length;
 }
+
+// Longest clean run ever, independent of the current streak — a relapse
+// doesn't erase this, so it stands as a "personal best" to aim back at.
+function longestCleanStreak(habit) {
+  let max = 0, current = 0;
+  let cursor = habit.createdAt;
+  const t = todayStr();
+  while (daysBetween(cursor, t) >= 0) {
+    if (isSlipOn(habit, cursor)) {
+      current = 0;
+    } else {
+      current++;
+      if (current > max) max = current;
+    }
+    cursor = addDays(cursor, 1);
+  }
+  return max;
+}
+
+// Total days since creation that weren't a slip — grows continuously
+// (doesn't reset on a slip like the streak does), which is what "money
+// saved" should track.
+function totalCleanDays(habit) {
+  const daysSinceCreation = daysBetween(habit.createdAt, todayStr()) + 1;
+  return Math.max(0, daysSinceCreation - totalSlips(habit));
+}
+function moneySaved(habit) {
+  if (!habit.costPerDay) return null;
+  return totalCleanDays(habit) * habit.costPerDay;
+}
+
+const MILESTONES = [
+  { days: 1, label: '1d' },
+  { days: 3, label: '3d' },
+  { days: 7, label: '1wk' },
+  { days: 14, label: '2wk' },
+  { days: 30, label: '1mo' },
+  { days: 60, label: '2mo' },
+  { days: 90, label: '3mo' },
+  { days: 180, label: '6mo' },
+  { days: 365, label: '1yr' }
+];
 
 function currentStreak(habit) {
   if (habit.type === 'bad') return badHabitStreak(habit);
@@ -205,15 +257,35 @@ function renderToday() {
 
   badEl.innerHTML = badHabits.length ? badHabits.map(h => {
     const slippedToday = isSlipOn(h, t);
+    const isDrafting = slipNoteDraftId === h.id;
     const streak = currentStreak(h);
+    const best = longestCleanStreak(h);
+    const saved = moneySaved(h);
+    const metaParts = [`${totalSlips(h)} slip${totalSlips(h) === 1 ? '' : 's'} total`, `best ${best}d`];
+    if (saved !== null) metaParts.push(`$${saved.toFixed(0)} saved`);
+
+    let controlHtml;
+    if (isDrafting) {
+      controlHtml = `
+        <div class="slip-note-row">
+          <input type="text" class="slip-note-input" id="slipNoteInput-${h.id}" placeholder="what triggered it? (optional)" maxlength="80">
+          <button class="btn-mini btn-mini-primary" data-id="${h.id}" data-action="confirm-slip">Log it</button>
+          <button class="btn-mini" data-id="${h.id}" data-action="cancel-slip-note">Cancel</button>
+        </div>`;
+    } else if (slippedToday) {
+      controlHtml = `<button class="slip-btn logged" data-id="${h.id}" data-action="toggle-slip">Slipped today</button>`;
+    } else {
+      controlHtml = `<button class="slip-btn" data-id="${h.id}" data-action="open-slip-note">Log a slip</button>`;
+    }
+
     return `
       <div class="ledger-row">
         <div class="ledger-row-main">
           <div class="ledger-row-name">${escapeHtml(h.name)}</div>
-          <div class="ledger-row-meta">${totalSlips(h)} slip${totalSlips(h) === 1 ? '' : 's'} logged total</div>
+          <div class="ledger-row-meta">${metaParts.join(' · ')}</div>
         </div>
         <span class="streak-pill ${streak > 0 ? 'good' : 'zero'}">${streak} clean day${streak === 1 ? '' : 's'}</span>
-        <button class="slip-btn ${slippedToday ? 'logged' : ''}" data-id="${h.id}" data-action="toggle-slip">${slippedToday ? 'Slipped today' : 'Log a slip'}</button>
+        ${controlHtml}
       </div>`;
   }).join('') : '';
 
@@ -252,20 +324,40 @@ function renderWeek() {
   const weekly = habits.filter(h => h.type === 'good' && h.frequency === 'weekly');
   const weekDates = currentWeekDates();
   const t = todayStr();
+  const thisMonday = mondayOf(t);
 
   el.innerHTML = weekly.map(h => {
     const count = weekDates.filter(d => isDoneOn(h, d)).length;
     const target = h.target || 1;
     const pct = Math.min(100, Math.round((count / target) * 100));
     const doneToday = isDoneOn(h, t);
+    const streak = currentStreak(h);
+
+    const history = [];
+    for (let i = 7; i >= 0; i--) {
+      const ws = addDays(thisMonday, -7 * i);
+      const weekEnd = addDays(ws, 6);
+      const before = daysBetween(h.createdAt, weekEnd) < 0;
+      const c = countLogsInWeek(h, ws);
+      history.push({ ws, c, before, met: c >= target });
+    }
+    const historyHtml = history.map(hh => {
+      const cls = hh.before ? 'before' : (hh.met ? 'met' : 'missed');
+      return `<span class="week-dot ${cls}" title="week of ${hh.ws}: ${hh.c}/${target}"></span>`;
+    }).join('');
+
     return `
       <div class="weekly-row">
         <button class="week-mark-btn ${doneToday ? 'checked' : ''}" data-id="${h.id}" data-action="toggle-good">${checkIcon()}</button>
         <div class="weekly-row-main">
           <div class="ledger-row-name">${escapeHtml(h.name)}</div>
           <div class="weekly-track"><div class="weekly-fill" style="width:${pct}%"></div></div>
+          <div class="week-history-row">${historyHtml}<span class="week-history-label">last 8 weeks</span></div>
         </div>
-        <span class="weekly-count">${count} / ${target} this week</span>
+        <div class="weekly-row-side">
+          <span class="streak-pill ${streak > 0 ? 'good' : 'zero'}">${streak} wk streak</span>
+          <span class="weekly-count">${count} / ${target} this week</span>
+        </div>
       </div>`;
   }).join('');
 
@@ -461,6 +553,80 @@ function renderHabitCalendars() {
   return `${header}<div class="cal-blocks">${blocks}</div>`;
 }
 
+/* ---------- Rendering: Quitting panel ---------- */
+function renderQuit() {
+  const el = document.getElementById('quitCards');
+  const bad = habits.filter(h => h.type === 'bad');
+  document.getElementById('emptyQuit').hidden = bad.length > 0;
+  el.style.display = bad.length ? '' : 'none';
+  if (!bad.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = bad.map(h => {
+    const streak = currentStreak(h);
+    const best = longestCleanStreak(h);
+    const saved = moneySaved(h);
+    const sinceLabel = strToDate(h.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Milestone track: everything reached so far is a filled chip; the very
+    // next one gets a mini progress bar toward it; the rest sit dashed and
+    // faint out ahead. Based on the current streak, not the best-ever one —
+    // so it reflects "how close am I right now," which resets after a slip.
+    let nextShown = false;
+    const chipsHtml = MILESTONES.map(m => {
+      if (best >= m.days) {
+        return `<span class="milestone-chip achieved" title="${m.label} reached"><span class="milestone-check">✓</span>${m.label}</span>`;
+      } else if (!nextShown) {
+        nextShown = true;
+        const pct = Math.min(100, Math.round((streak / m.days) * 100));
+        return `<span class="milestone-chip next" title="${streak}/${m.days} days toward ${m.label}">
+          <span class="milestone-chip-top"><span>${m.label}</span><span>${streak}/${m.days}</span></span>
+          <span class="milestone-chip-track"><span class="milestone-chip-fill" style="width:${pct}%"></span></span>
+        </span>`;
+      } else {
+        return `<span class="milestone-chip future">${m.label}</span>`;
+      }
+    }).join('');
+
+    const slipDates = Object.keys(h.logs).filter(d => isSlipOn(h, d)).sort().reverse().slice(0, 5);
+    const slipListHtml = slipDates.length
+      ? `<ul class="slip-history">${slipDates.map(d => {
+          const note = slipNoteOn(h, d);
+          const nice = strToDate(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          return `<li><span class="slip-history-date">${nice}</span>${note ? `<span class="slip-history-note">${escapeHtml(note)}</span>` : '<span class="slip-history-note slip-history-note--empty">no note</span>'}</li>`;
+        }).join('')}</ul>`
+      : `<p class="slip-history-empty">No slips logged since ${escapeHtml(sinceLabel)}.</p>`;
+
+    return `
+      <div class="quit-card">
+        <div class="quit-card-head">
+          <h3>${escapeHtml(h.name)}</h3>
+          <span class="quit-since">quitting since ${sinceLabel}</span>
+        </div>
+        <div class="quit-stats">
+          <div class="quit-stat is-primary">
+            <div class="quit-stat-value">${streak}</div>
+            <div class="quit-stat-label">day streak</div>
+          </div>
+          <div class="quit-stat">
+            <div class="quit-stat-value">${best}</div>
+            <div class="quit-stat-label">best ever</div>
+          </div>
+          <div class="quit-stat">
+            <div class="quit-stat-value">${totalSlips(h)}</div>
+            <div class="quit-stat-label">total slips</div>
+          </div>
+          ${saved !== null ? `<div class="quit-stat">
+            <div class="quit-stat-value">$${saved.toFixed(0)}</div>
+            <div class="quit-stat-label">saved</div>
+          </div>` : ''}
+        </div>
+        <div class="milestone-track">${chipsHtml}</div>
+        <div class="quit-card-section-label">Recent slips</div>
+        ${slipListHtml}
+      </div>`;
+  }).join('');
+}
+
 /* ---------- Rendering: Manage panel ---------- */
 function renderManage() {
   const el = document.getElementById('manageList');
@@ -469,12 +635,17 @@ function renderManage() {
     return;
   }
   el.innerHTML = habits.map(h => {
-    const freqLabel = h.type === 'bad' ? 'quitting' : (h.frequency === 'weekly' ? `weekly · ${h.target}x` : 'daily');
+    let metaText;
+    if (h.type === 'bad') {
+      metaText = 'quitting' + (h.costPerDay ? ` · $${h.costPerDay}/day avoided` : '');
+    } else {
+      metaText = 'building · ' + (h.frequency === 'weekly' ? `weekly · ${h.target}x` : 'daily');
+    }
     return `
       <div class="manage-row">
         <div class="manage-row-main">
           <div class="manage-row-name">${escapeHtml(h.name)}</div>
-          <div class="manage-row-meta">${h.type === 'good' ? 'building' : 'quitting'} · ${freqLabel}</div>
+          <div class="manage-row-meta">${metaText}</div>
         </div>
         <button class="edit-btn" data-id="${h.id}" data-action="edit">Edit</button>
         <button class="delete-btn" data-id="${h.id}" data-action="delete">Remove</button>
@@ -497,18 +668,44 @@ function toggleGoodToday(id) {
 }
 
 function toggleSlipToday(id) {
+  // Only used to remove an already-logged slip; logging a new one goes
+  // through the note-capture flow (openSlipNote → confirmSlip).
   const h = habits.find(x => x.id === id);
   if (!h) return;
   const t = todayStr();
   if (isSlipOn(h, t)) {
     delete h.logs[t];
+    saveHabits(habits);
+    renderAll();
     showToast('Slip removed');
-  } else {
-    h.logs[t] = 'slip';
-    showToast('Slip logged — tomorrow is a fresh start');
   }
+}
+
+let slipNoteDraftId = null;
+
+function openSlipNote(id) {
+  slipNoteDraftId = id;
+  renderToday();
+  setTimeout(() => {
+    const el = document.getElementById('slipNoteInput-' + id);
+    if (el) el.focus();
+  }, 0);
+}
+function cancelSlipNote() {
+  slipNoteDraftId = null;
+  renderToday();
+}
+function confirmSlip(id) {
+  const input = document.getElementById('slipNoteInput-' + id);
+  const note = input ? input.value.trim() : '';
+  const h = habits.find(x => x.id === id);
+  if (!h) return;
+  const t = todayStr();
+  h.logs[t] = note ? { status: 'slip', note } : 'slip';
+  slipNoteDraftId = null;
   saveHabits(habits);
   renderAll();
+  showToast('Slip logged — tomorrow is a fresh start');
 }
 
 function deleteHabit(id) {
@@ -521,13 +718,14 @@ function deleteHabit(id) {
   renderAll();
 }
 
-function updateHabit(id, { name, type, frequency, target }) {
+function updateHabit(id, { name, type, frequency, target, costPerDay }) {
   const h = habits.find(x => x.id === id);
   if (!h) return;
   h.name = name.trim();
   h.type = type;
   h.frequency = type === 'bad' ? 'daily' : frequency;
   h.target = type === 'good' && frequency === 'weekly' ? Number(target) : null;
+  h.costPerDay = type === 'bad' && costPerDay ? Number(costPerDay) : null;
   // A habit that's no longer "bad" shouldn't keep slip logs, and vice versa —
   // but we leave history alone rather than silently deleting it; only the
   // fields that drive today's view/streak math change.
@@ -536,13 +734,14 @@ function updateHabit(id, { name, type, frequency, target }) {
   showToast(`"${h.name}" updated`);
 }
 
-function addHabit({ name, type, frequency, target }) {
+function addHabit({ name, type, frequency, target, costPerDay }) {
   const habit = {
     id: makeId(),
     name: name.trim(),
     type,
     frequency: type === 'bad' ? 'daily' : frequency,
     target: type === 'good' && frequency === 'weekly' ? Number(target) : null,
+    costPerDay: type === 'bad' && costPerDay ? Number(costPerDay) : null,
     createdAt: todayStr(),
     logs: {}
   };
@@ -566,6 +765,7 @@ function showToast(msg) {
 function renderAll() {
   renderToday();
   renderWeek();
+  renderQuit();
   renderProgress();
   renderManage();
 }
@@ -578,8 +778,18 @@ document.addEventListener('click', (e) => {
   const action = actionEl.dataset.action;
   if (action === 'toggle-good') toggleGoodToday(id);
   if (action === 'toggle-slip') toggleSlipToday(id);
+  if (action === 'open-slip-note') openSlipNote(id);
+  if (action === 'cancel-slip-note') cancelSlipNote();
+  if (action === 'confirm-slip') confirmSlip(id);
   if (action === 'delete') deleteHabit(id);
   if (action === 'edit') enterEditMode(id);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.classList.contains('slip-note-input')) {
+    e.preventDefault();
+    confirmSlip(e.target.id.replace('slipNoteInput-', ''));
+  }
 });
 
 document.getElementById('themeToggle').addEventListener('click', toggleTheme);
@@ -609,6 +819,7 @@ document.getElementById('habitTypeSeg').addEventListener('click', (e) => {
   btn.classList.add('active');
   formState.type = btn.dataset.value;
   document.getElementById('freqField').style.display = formState.type === 'bad' ? 'none' : 'block';
+  document.getElementById('costField').hidden = formState.type !== 'bad';
   updateTargetVisibility();
 });
 
@@ -638,7 +849,9 @@ function resetForm() {
   setSegValue('habitTypeSeg', 'good');
   setSegValue('habitFreqSeg', 'daily');
   document.getElementById('freqField').style.display = 'block';
+  document.getElementById('costField').hidden = true;
   document.getElementById('habitTarget').value = 3;
+  document.getElementById('habitCost').value = '';
   updateTargetVisibility();
 }
 
@@ -652,7 +865,9 @@ function enterEditMode(id) {
   setSegValue('habitTypeSeg', h.type);
   setSegValue('habitFreqSeg', h.frequency);
   document.getElementById('freqField').style.display = h.type === 'bad' ? 'none' : 'block';
+  document.getElementById('costField').hidden = h.type !== 'bad';
   document.getElementById('habitTarget').value = h.target || 3;
+  document.getElementById('habitCost').value = h.costPerDay || '';
   updateTargetVisibility();
 
   document.getElementById('formHeading').textContent = 'Edit habit';
@@ -680,11 +895,12 @@ document.getElementById('habitForm').addEventListener('submit', (e) => {
   const name = document.getElementById('habitName').value.trim();
   if (!name) return;
   const target = document.getElementById('habitTarget').value;
+  const costPerDay = document.getElementById('habitCost').value;
   if (editingId) {
-    updateHabit(editingId, { name, type: formState.type, frequency: formState.frequency, target });
+    updateHabit(editingId, { name, type: formState.type, frequency: formState.frequency, target, costPerDay });
     exitEditMode();
   } else {
-    addHabit({ name, type: formState.type, frequency: formState.frequency, target });
+    addHabit({ name, type: formState.type, frequency: formState.frequency, target, costPerDay });
     resetForm();
   }
 });

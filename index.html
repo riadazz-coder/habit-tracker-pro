@@ -33,6 +33,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="today">Today's entry</button>
     <button class="tab" data-tab="week">This week</button>
+    <button class="tab" data-tab="quit">Quitting</button>
     <button class="tab" data-tab="progress">Progress</button>
     <button class="tab" data-tab="manage">Manage habits</button>
   </nav>
@@ -66,6 +67,18 @@
     <div class="ledger" id="weeklyHabitsList"></div>
     <div class="empty-state" id="emptyWeek" hidden>
       <p>No weekly habits set up yet.</p>
+    </div>
+  </section>
+
+  <!-- QUIT SYSTEM -->
+  <section class="panel" id="panel-quit">
+    <div class="section-head">
+      <h2>Quitting</h2>
+      <span class="section-note">Streaks, milestones, and what you're saving by not doing it</span>
+    </div>
+    <div id="quitCards" class="quit-cards"></div>
+    <div class="empty-state" id="emptyQuit" hidden>
+      <p>No habits you're quitting yet — add one under Manage.</p>
     </div>
   </section>
 
@@ -129,6 +142,11 @@
       <div class="form-row" id="targetRow" hidden>
         <label for="habitTarget">Times per week</label>
         <input type="number" id="habitTarget" min="1" max="7" value="3">
+      </div>
+      <div class="form-row" id="costField" hidden>
+        <label for="habitCost">Cost avoided per clean day (optional)</label>
+        <input type="number" id="habitCost" min="0" step="0.01" placeholder="e.g. 8">
+        <p class="field-hint">Used to estimate what you're saving as your clean streak grows</p>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" id="formSubmitBtn">Add to ledger</button>

@@ -298,6 +298,50 @@ body {
   border-color: var(--bad);
 }
 
+.slip-note-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.slip-note-input {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 7px 10px;
+  border: 1px solid var(--bad-line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.slip-note-input:focus {
+  outline: 2px solid var(--bad);
+  outline-offset: 1px;
+}
+
+.btn-mini {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-mini:hover { color: var(--ink); }
+
+.btn-mini-primary {
+  background: var(--bad);
+  color: white;
+  border-color: var(--bad);
+}
+.btn-mini-primary:hover { color: white; opacity: 0.9; }
+
 /* ---------- Weekly rows ---------- */
 .weekly-row {
   display: flex;
@@ -330,6 +374,39 @@ body {
   font-size: 13px;
   color: var(--ink-soft);
   flex-shrink: 0;
+}
+
+.weekly-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.week-history-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 9px;
+}
+.week-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  flex-shrink: 0;
+}
+.week-dot.met { background: var(--good); border-color: var(--good); }
+.week-dot.missed { background: var(--surface); border: 1px solid var(--line-strong); }
+.week-dot.before { background: transparent; border: 1px dashed var(--line); }
+.week-history-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-left: 4px;
+  white-space: nowrap;
 }
 
 .week-mark-btn {
@@ -444,8 +521,14 @@ body {
   padding: 9px 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: white;
+  background: var(--bg);
   color: var(--ink);
+}
+
+.field-hint {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin: 6px 0 0;
 }
 
 .form-row input:focus {
@@ -465,7 +548,7 @@ body {
   font-family: var(--font-body);
   font-size: 13px;
   padding: 9px 6px;
-  background: white;
+  background: var(--bg);
   border: none;
   border-right: 1px solid var(--line-strong);
   cursor: pointer;
@@ -538,6 +621,172 @@ body {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* ---------- Quit tracker ---------- */
+.quit-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.quit-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 22px 24px;
+}
+
+.quit-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.quit-card-head h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  margin: 0;
+}
+
+.quit-since {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.quit-stats {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.quit-stat-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1;
+}
+.quit-stat.is-primary .quit-stat-value { color: var(--good); }
+
+.quit-stat-label {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin-top: 6px;
+}
+
+.milestone-track {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.milestone-chip {
+  border-radius: 20px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.milestone-chip.achieved {
+  background: var(--good);
+  color: var(--bg);
+}
+
+.milestone-chip.next {
+  background: var(--surface);
+  border: 1.5px solid var(--good);
+  color: var(--good);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 13px;
+}
+.milestone-chip.next .milestone-chip-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+}
+.milestone-chip-track {
+  height: 4px;
+  background: var(--good-soft);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 70px;
+}
+.milestone-chip-fill {
+  height: 100%;
+  background: var(--good);
+  border-radius: 4px;
+}
+
+.milestone-chip.future {
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  color: var(--ink-faint);
+}
+
+.milestone-check {
+  font-size: 11px;
+}
+
+.quit-card-section-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin-top: 22px;
+  margin-bottom: 10px;
+}
+
+.slip-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.slip-history li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.slip-history li:last-child { border-bottom: none; }
+
+.slip-history-date {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--bad);
+  flex-shrink: 0;
+  width: 52px;
+}
+
+.slip-history-note {
+  color: var(--ink-soft);
+}
+.slip-history-note--empty {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.slip-history-empty {
+  font-size: 13px;
+  color: var(--ink-faint);
+  font-style: italic;
+  margin: 0;
 }
 
 /* ---------- Habit calendars ---------- */
