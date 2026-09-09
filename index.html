@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Habit Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="masthead-left">
+      <h1>Ledger</h1>
+      <p class="subtitle">A daily record of habits kept and habits broken.</p>
+    </div>
+    <div class="masthead-right">
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg class="icon-sun" width="17" height="17" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4.2" stroke="currentColor" stroke-width="1.6"/><path d="M10 1.5V4M10 16v2.5M18.5 10H16M4 10H1.5M15.66 4.34L13.9 6.1M6.1 13.9l-1.76 1.76M15.66 15.66L13.9 13.9M6.1 6.1L4.34 4.34" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <svg class="icon-moon" width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M17 11.2A7.2 7.2 0 018.8 3 7.2 7.2 0 1017 11.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="masthead-right-text">
+        <div class="today-date" id="todayDate"></div>
+        <div class="masthead-stats" id="mastheadStats"></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="today">Today's entry</button>
+    <button class="tab" data-tab="week">This week</button>
+    <button class="tab" data-tab="progress">Progress</button>
+    <button class="tab" data-tab="manage">Manage habits</button>
+  </nav>
+
+  <!-- TODAY -->
+  <section class="panel active" id="panel-today">
+    <div class="section-head">
+      <h2>Good habits</h2>
+      <span class="section-note">Check off what you did today</span>
+    </div>
+    <div class="ledger" id="goodHabitsToday"></div>
+
+    <div class="section-head section-head--bad">
+      <h2>Habits to quit</h2>
+      <span class="section-note">Clean by default — log it only if you slipped</span>
+    </div>
+    <div class="ledger" id="badHabitsToday"></div>
+
+    <div class="empty-state" id="emptyToday" hidden>
+      <p>No habits yet. Start your ledger.</p>
+      <button class="btn btn-primary" id="emptyTodayAddBtn">Add your first habit</button>
+    </div>
+  </section>
+
+  <!-- WEEK -->
+  <section class="panel" id="panel-week">
+    <div class="section-head">
+      <h2>Weekly habits</h2>
+      <span class="section-note">Progress toward this week's target</span>
+    </div>
+    <div class="ledger" id="weeklyHabitsList"></div>
+    <div class="empty-state" id="emptyWeek" hidden>
+      <p>No weekly habits set up yet.</p>
+    </div>
+  </section>
+
+  <!-- PROGRESS -->
+  <section class="panel" id="panel-progress">
+    <div class="section-head">
+      <h2>Daily completion, last 30 days</h2>
+      <span class="section-note">Share of daily good habits completed each day</span>
+    </div>
+    <div class="graph-wrap" id="completionGraph"></div>
+
+    <div class="section-head">
+      <h2>Weekly completion, last 12 weeks</h2>
+      <span class="section-note">Average of each good habit's weekly target met</span>
+    </div>
+    <div class="graph-wrap" id="weeklyGraph"></div>
+
+    <div class="section-head">
+      <h2>Current streaks</h2>
+      <span class="section-note">Consecutive days kept (good) or clean (bad)</span>
+    </div>
+    <div class="graph-wrap" id="streakGraph"></div>
+
+    <div class="section-head">
+      <h2>Last 30 days, by habit</h2>
+      <span class="section-note">One square per day</span>
+    </div>
+    <div id="habitCalendars"></div>
+
+    <div class="empty-state" id="emptyProgress" hidden>
+      <p>Nothing to chart yet — log a few days first.</p>
+    </div>
+  </section>
+
+  <!-- MANAGE -->
+  <section class="panel" id="panel-manage">
+    <div class="section-head">
+      <h2 id="formHeading">Add a habit</h2>
+    </div>
+    <form class="habit-form" id="habitForm">
+      <div class="form-row">
+        <label for="habitName">Name</label>
+        <input type="text" id="habitName" placeholder="e.g. Read 10 pages" required maxlength="60">
+      </div>
+      <div class="form-row form-row--split">
+        <div>
+          <label>Type</label>
+          <div class="segmented" id="habitTypeSeg">
+            <button type="button" class="seg-option active" data-value="good">Build (good)</button>
+            <button type="button" class="seg-option" data-value="bad">Quit (bad)</button>
+          </div>
+        </div>
+        <div id="freqField">
+          <label>Frequency</label>
+          <div class="segmented" id="habitFreqSeg">
+            <button type="button" class="seg-option active" data-value="daily">Daily</button>
+            <button type="button" class="seg-option" data-value="weekly">Weekly</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-row" id="targetRow" hidden>
+        <label for="habitTarget">Times per week</label>
+        <input type="number" id="habitTarget" min="1" max="7" value="3">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="formSubmitBtn">Add to ledger</button>
+        <button type="button" class="btn btn-text" id="cancelEditBtn" hidden>Cancel edit</button>
+      </div>
+    </form>
+
+    <div class="section-head">
+      <h2>All habits</h2>
+    </div>
+    <div class="manage-list" id="manageList"></div>
+
+    <div class="section-head">
+      <h2>Backup</h2>
+      <span class="section-note">Your data lives in this browser only — export it to keep a copy or move devices</span>
+    </div>
+    <div class="backup-row">
+      <button class="btn btn-secondary" id="exportBtn">Export data (.json)</button>
+      <label class="btn btn-secondary" for="importInput">Import data (.json)</label>
+      <input type="file" id="importInput" accept="application/json" hidden>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
